@@ -1,20 +1,9 @@
 use std::collections::HashMap;
 
 use dioxus::prelude::*;
-use dioxus::server::ServerFnError;
-use http::HeaderMap;
 use serde::Deserialize;
 use serde::Serialize;
-use tracing::error;
-use tracing::info;
-use tracing::warn;
 use validator::Validate;
-
-use crate::rate_limit;
-use crate::smtp::EmailData;
-use crate::smtp::{self};
-use crate::utils::get_client_ip;
-use crate::validation;
 
 #[derive(Debug, Validate, Serialize, Deserialize)]
 pub struct ContactForm {
@@ -36,6 +25,10 @@ pub struct ContactForm {
     pub message: String,
 }
 
+#[cfg(feature = "smtp")]
+use crate::smtp::EmailData;
+
+#[cfg(feature = "smtp")]
 impl From<ContactForm> for EmailData {
     fn from(value: ContactForm) -> Self {
         let ContactForm {
@@ -61,6 +54,17 @@ pub struct ContactResponse {
 
 #[server]
 pub async fn submit_contact(form: ContactForm) -> Result<ContactResponse, ServerFnError> {
+    use http::HeaderMap;
+    use tracing::error;
+    use tracing::warn;
+    use validator::Validate;
+
+    use crate::rate_limit;
+    #[cfg(feature = "smtp")]
+    use crate::smtp;
+    use crate::utils::get_client_ip;
+    use crate::validation;
+
     let headers: HeaderMap = dioxus::fullstack::FullstackContext::extract().await?;
     let ip = get_client_ip(&headers);
 
@@ -82,29 +86,46 @@ pub async fn submit_contact(form: ContactForm) -> Result<ContactResponse, Server
         });
     }
 
-    match smtp::send_email(form).await {
-        Ok(()) => {
-            info!("Message sent successfully from IP {ip}");
-            Ok(ContactResponse {
-                success: true,
-                message: "Message sent successfully!".to_string(),
-                errors: None,
-            })
+    #[cfg(feature = "smtp")]
+    {
+        use tracing::info;
+
+        match smtp::send_email(form).await {
+            Ok(()) => {
+                info!("Message sent successfully from IP {ip}");
+                Ok(ContactResponse {
+                    success: true,
+                    message: "Message sent successfully!".to_string(),
+                    errors: None,
+                })
+            }
+            Err(e) => {
+                error!("Failed to send message from IP {ip}: {e}");
+                Ok(ContactResponse {
+                    success: false,
+                    message: "Failed to send message. Please try again later.".to_string(),
+                    errors: None,
+                })
+            }
         }
-        Err(e) => {
-            error!("Failed to send message from IP {ip}: {e}");
-            Ok(ContactResponse {
-                success: false,
-                message: "Failed to send message. Please try again later.".to_string(),
-                errors: None,
-            })
-        }
+    }
+
+    #[cfg(not(feature = "smtp"))]
+    {
+        let _ = (form, ip);
+        error!("SMTP feature not enabled");
+        Ok(ContactResponse {
+            success: false,
+            message: "Server email configuration missing.".to_string(),
+            errors: None,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::validation;
 
     fn valid_form() -> ContactForm {
         ContactForm {

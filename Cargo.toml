@@ -42,4 +42,4 @@ server = [
     "dep:tracing-appender",
 ]
 smtp = [ "server", "dep:lettre" ]
-contact = [ "server", "smtp" ]
+contact = []

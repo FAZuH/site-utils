@@ -1,6 +1,8 @@
+#[cfg(feature = "server")]
 pub mod config;
 #[cfg(feature = "contact")]
 pub mod contact;
+#[cfg(feature = "server")]
 pub mod logging;
 pub mod rate_limit;
 #[cfg(feature = "smtp")]
