@@ -1,0 +1,45 @@
+[package]
+name = "fazuh-utils"
+# Version will be updated by CI in `release` branch.
+# Avoid modifying version manually or it will break CI
+# DO NOT remove the spaces
+
+
+version = "0.1.0"
+
+
+edition = "2024"
+
+[lints.clippy]
+uninlined_format_args = "warn"
+new_without_default = "allow"
+
+[dependencies]
+dioxus = { version = "0.7.9", features = ["fullstack"] }
+http = "1.4.2"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+tracing = "0.1.44"
+validator = { version = "0.20.0", features = ["derive"] }
+
+# Server-only dependencies
+dotenvy = { version = "0.15", optional = true }
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1-rustls-tls", "builder"], optional = true }
+tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+tracing-appender = { version = "0.2", optional = true }
+
+[dev-dependencies]
+serial_test = "3"
+
+[features]
+default = []
+server = [
+    "dioxus/server",
+    "dep:dotenvy",
+    "dep:tokio",
+    "dep:tracing-subscriber",
+    "dep:tracing-appender",
+]
+smtp = [ "server", "dep:lettre" ]
+contact = [ "server", "smtp" ]
