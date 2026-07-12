@@ -1,5 +1,7 @@
 #[cfg(feature = "server")]
 pub mod config;
+#[cfg(feature = "embed")]
+pub mod embed;
 #[cfg(feature = "contact")]
 pub mod contact;
 #[cfg(feature = "server")]

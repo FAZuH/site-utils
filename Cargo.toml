@@ -43,3 +43,4 @@ server = [
 ]
 smtp = [ "server", "dep:lettre" ]
 contact = []
+embed = []
