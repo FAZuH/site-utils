@@ -16,6 +16,7 @@ use crate::smtp::config::SmtpSecurity;
 pub struct EmailData {
     pub name: String,
     pub email: String,
+    pub subject: Option<String>,
     pub message: String,
 }
 
@@ -36,11 +37,15 @@ pub async fn send_email(form: impl Into<EmailData>) -> Result<(), String> {
         .parse()
         .map_err(|e| format!("Invalid reply-to address: {e}"))?;
 
+    let subject = form
+        .subject
+        .unwrap_or_else(|| format!("[fazuh-site] Message from {}", form.name));
+
     let email = Message::builder()
         .from(from)
         .to(to)
         .reply_to(reply_to)
-        .subject(format!("[fazuh-site] Message from {}", form.name))
+        .subject(subject)
         .header(lettre::message::header::ContentType::TEXT_PLAIN)
         .body(format!(
             "From: {name} <{email}>\n\n{message}",

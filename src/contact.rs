@@ -18,6 +18,13 @@ pub struct ContactForm {
     pub email: String,
 
     #[validate(length(
+        min = 2,
+        max = 200,
+        message = "Subject must be between 2 and 200 characters"
+    ))]
+    pub subject: Option<String>,
+
+    #[validate(length(
         min = 10,
         max = 1000,
         message = "Message must be between 10 and 1000 characters"
@@ -34,11 +41,13 @@ impl From<ContactForm> for EmailData {
         let ContactForm {
             name,
             email,
+            subject,
             message,
         } = value;
         EmailData {
             name,
             email,
+            subject,
             message,
         }
     }
@@ -131,6 +140,7 @@ mod tests {
         ContactForm {
             name: "John Doe".to_string(),
             email: "john@example.com".to_string(),
+            subject: None,
             message: "I would like to discuss a project.".to_string(),
         }
     }
@@ -180,6 +190,139 @@ mod tests {
         };
         let result = form.validate();
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn subject_none_passes_validation() {
+        let form = ContactForm {
+            subject: None,
+            ..valid_form()
+        };
+        assert!(form.validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_subject_shorter_than_2_characters() {
+        let form = ContactForm {
+            subject: Some("a".into()),
+            ..valid_form()
+        };
+        assert!(form.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_subject_longer_than_200_characters() {
+        let form = ContactForm {
+            subject: Some("a".repeat(201)),
+            ..valid_form()
+        };
+        assert!(form.validate().is_err());
+    }
+
+    #[test]
+    fn subject_at_minimum_length_passes() {
+        let form = ContactForm {
+            subject: Some("ab".into()),
+            ..valid_form()
+        };
+        assert!(form.validate().is_ok());
+    }
+
+    #[test]
+    fn subject_at_maximum_length_passes() {
+        let form = ContactForm {
+            subject: Some("a".repeat(200)),
+            ..valid_form()
+        };
+        assert!(form.validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_empty_email() {
+        let form = ContactForm {
+            email: String::new(),
+            ..valid_form()
+        };
+        assert!(form.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_email_missing_domain() {
+        let form = ContactForm {
+            email: "user@".into(),
+            ..valid_form()
+        };
+        assert!(form.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_email_missing_local_part() {
+        let form = ContactForm {
+            email: "@domain.com".into(),
+            ..valid_form()
+        };
+        assert!(form.validate().is_err());
+    }
+
+    #[test]
+    fn contact_form_serialization_roundtrip() {
+        let form = valid_form();
+        let json = serde_json::to_string(&form).unwrap();
+        let deserialized: ContactForm = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.name, form.name);
+        assert_eq!(deserialized.email, form.email);
+        assert_eq!(deserialized.subject, form.subject);
+        assert_eq!(deserialized.message, form.message);
+    }
+
+    #[test]
+    fn contact_response_omits_errors_when_none() {
+        let resp = ContactResponse {
+            success: true,
+            message: "ok".into(),
+            errors: None,
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(
+            !json.contains("errors"),
+            "None errors should be skipped by #[serde(skip_serializing_if)]"
+        );
+    }
+
+    #[cfg(feature = "smtp")]
+    #[test]
+    fn converts_contact_form_to_email_data() {
+        use crate::smtp::EmailData;
+
+        let form = ContactForm {
+            name: "Alice".into(),
+            email: "alice@test.com".into(),
+            subject: Some("Hi".into()),
+            message: "Hello there!".into(),
+        };
+        let data: EmailData = form.into();
+
+        assert_eq!(data.name, "Alice");
+        assert_eq!(data.email, "alice@test.com");
+        assert_eq!(data.subject, Some("Hi".into()));
+        assert_eq!(data.message, "Hello there!");
+    }
+
+    #[cfg(feature = "smtp")]
+    #[test]
+    fn converts_contact_form_without_subject_to_email_data() {
+        use crate::smtp::EmailData;
+
+        let form = ContactForm {
+            name: "Bob".into(),
+            email: "bob@test.com".into(),
+            subject: None,
+            message: "No subject here.".into(),
+        };
+        let data: EmailData = form.into();
+
+        assert_eq!(data.name, "Bob");
+        assert!(data.subject.is_none());
     }
 
     #[test]
