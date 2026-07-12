@@ -1,9 +1,9 @@
 #[cfg(feature = "server")]
 pub mod config;
-#[cfg(feature = "embed")]
-pub mod embed;
 #[cfg(feature = "contact")]
 pub mod contact;
+#[cfg(feature = "embed")]
+pub mod embed;
 #[cfg(feature = "server")]
 pub mod logging;
 pub mod rate_limit;
