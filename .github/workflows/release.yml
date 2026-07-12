@@ -1,0 +1,21 @@
+name: Release & Deploy
+
+on:
+  push:
+    branches:
+      - release
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    name: Release
+    uses: ./.github/workflows/_release.yml
+    with:
+      binary-name: site-utils
+      platforms: linux
+      build-binaries: false
+      publish-crates: false
+    secrets: inherit
