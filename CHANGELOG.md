@@ -1,3 +1,14 @@
+## 0.1.1 (2026-07-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* Use string for HeadEmbed fields
+
+### Code Refactoring
+
+* Use string for HeadEmbed fields ([2b0f99a](https://github.com/FAZuH/site-utils/commit/2b0f99a1cff2147986db7d547ea8fed261a021ba))
+
 ## 0.1.0 (2026-07-12)
 
 
