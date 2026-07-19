@@ -1,3 +1,10 @@
+## 0.1.3 (2026-07-19)
+
+
+### Code Refactoring
+
+* Add SmtpSecurity::Plain ([feb3d51](https://github.com/FAZuH/site-utils/commit/feb3d51b2b837e354f77e57de6835d9caa51a9ee))
+
 ## 0.1.2 (2026-07-19)
 
 
