@@ -45,6 +45,7 @@ impl SmtpConfig {
 pub enum SmtpSecurity {
     StartTls,
     Tls,
+    Plain,
 }
 
 impl SmtpSecurity {
@@ -52,6 +53,7 @@ impl SmtpSecurity {
         match s.to_lowercase().as_str() {
             "tls" | "wrapper" | "implicit" => Some(Self::Tls),
             "starttls" | "start_tls" => Some(Self::StartTls),
+            "plain" | "none" => Some(Self::Plain),
             _ => None,
         }
     }
@@ -60,6 +62,7 @@ impl SmtpSecurity {
         match self {
             Self::Tls => 465,
             Self::StartTls => 587,
+            Self::Plain => 25,
         }
     }
 }
