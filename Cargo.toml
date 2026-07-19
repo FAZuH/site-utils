@@ -31,6 +31,8 @@ tracing-appender = { version = "0.2", optional = true }
 
 [dev-dependencies]
 serial_test = "3"
+mailin-embedded = { version = "0.8", default-features = false, features = ["rtls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 [features]
 default = []
