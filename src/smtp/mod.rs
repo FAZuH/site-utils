@@ -106,15 +106,9 @@ pub fn build_transport(config: &SmtpConfig) -> Result<AsyncSmtpTransport<Tokio1E
             }
         }
         SmtpSecurity::Plain => {
-            // Opportunistic STARTTLS: upgrade if available, otherwise stay plain.
-            AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&config.smtp_host)
-                .map_err(|e| format!("Failed to configure SMTP relay: {e}"))?
+            // Plaintext connection — no TLS at all (local relays only).
+            AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&config.smtp_host)
                 .port(config.smtp_port)
-                .tls(Tls::Opportunistic(
-                    TlsParameters::builder(config.smtp_host.clone())
-                        .build()
-                        .map_err(|e| format!("Failed to build TLS parameters: {e}"))?,
-                ))
                 .build()
         }
     })
