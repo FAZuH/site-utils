@@ -1,3 +1,14 @@
+## 0.1.2 (2026-07-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* Redesign ContactForm with builder pattern, add phone field
+
+### New Features
+
+* Redesign ContactForm with builder pattern, add phone field ([c421875](https://github.com/FAZuH/site-utils/commit/c4218751386e3fe0fa7f531bd2b0fe1e690ebdf5))
+
 ## 0.1.1 (2026-07-12)
 
 
