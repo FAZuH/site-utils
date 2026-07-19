@@ -15,7 +15,8 @@ use crate::smtp::config::SmtpSecurity;
 
 pub struct EmailData {
     pub name: String,
-    pub email: String,
+    pub email: Option<String>,
+    pub phone: Option<String>,
     pub subject: Option<String>,
     pub message: String,
 }
@@ -33,13 +34,18 @@ pub async fn send_email(form: impl Into<EmailData>) -> Result<(), String> {
         .parse()
         .map_err(|e| format!("Invalid SMTP_TO address: {e}"))?;
 
-    let reply_to = format!("{} <{}>", form.name, form.email)
-        .parse()
-        .map_err(|e| format!("Invalid reply-to address: {e}"))?;
+    let reply_to = match &form.email {
+        Some(email) => format!("{} <{}>", form.name, email)
+            .parse()
+            .map_err(|e| format!("Invalid reply-to address: {e}"))?,
+        None => from.clone(),
+    };
 
     let subject = form
         .subject
         .unwrap_or_else(|| format!("[fazuh-site] Message from {}", form.name));
+
+    let email_display = form.email.as_deref().unwrap_or("no-reply");
 
     let email = Message::builder()
         .from(from)
@@ -48,9 +54,10 @@ pub async fn send_email(form: impl Into<EmailData>) -> Result<(), String> {
         .subject(subject)
         .header(lettre::message::header::ContentType::TEXT_PLAIN)
         .body(format!(
-            "From: {name} <{email}>\n\n{message}",
+            "From: {name} <{email}>\nPhone: {phone}\n\n{message}",
             name = form.name,
-            email = form.email,
+            email = email_display,
+            phone = form.phone.as_deref().unwrap_or("-"),
             message = form.message,
         ))
         .map_err(|e| format!("Failed to build email: {e}"))?;
