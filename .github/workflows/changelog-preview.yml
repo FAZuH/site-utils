@@ -15,14 +15,23 @@ permissions:
   contents: read
 
 jobs:
+  workspace:
+    name: Detect Workspace Bumps
+    uses: ./.github/workflows/_workspace-bump-preview.yml
+
   preview:
     name: Preview Changelog
+    needs: [workspace]
     if: |
-      (github.event_name == 'pull_request' && !github.event.pull_request.draft) ||
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'merge_group' ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
-       (contains(github.event.comment.body, '## Override Changelog') || contains(github.event.comment.body, '## Bump')))
+      always() &&
+      (needs.workspace.result == 'success' || needs.workspace.result == 'skipped') &&
+      (
+        (github.event_name == 'pull_request' && !github.event.pull_request.draft) ||
+        github.event_name == 'workflow_dispatch' ||
+        github.event_name == 'merge_group' ||
+        (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
+         (contains(github.event.comment.body, '## Override Changelog') || contains(github.event.comment.body, '## Bump')))
+      )
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -45,8 +54,7 @@ jobs:
 
       - name: Install changelog dependencies
         run: |
-          npm install conventional-changelog-conventionalcommits@7.0.2
-          rm -f package.json package-lock.json
+          npm install --no-save --no-package-lock conventional-changelog-conventionalcommits@7.0.2
 
       - name: Generate Changelog Preview
         id: changelog
@@ -62,7 +70,7 @@ jobs:
           output-file: "CHANGELOG_PREVIEW.md"
           release-count: 1
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          config-file-path: ./.github/.config.js
+          config-file-path: ./.github/.config.cjs
           version-file: ./version.json
           preset: conventionalcommits
 
@@ -71,51 +79,9 @@ jobs:
           echo '${{ steps.changelog.outputs.tag }}' > /tmp/next_tag.txt
           echo '${{ steps.changelog.outputs.skipped }}' > /tmp/skipped.txt
 
-      - name: Detect changed workspace members
-        run: |
-          : > /tmp/member_versions.txt
-          if ! grep -q '^\[workspace\]' Cargo.toml; then
-            exit 0
-          fi
-          MEMBERS=$(find crates -maxdepth 2 -name Cargo.toml -exec dirname {} \; | sed 's|^crates/||' | sort -u)
-          if [ -z "$MEMBERS" ]; then
-            exit 0
-          fi
-          PREV_TAG=$(git tag -l 'v*' --sort=-version:refname | head -1)
-          if [ -z "$PREV_TAG" ]; then
-            CHANGED="$MEMBERS"
-          else
-            for member in $MEMBERS; do
-              if git diff --name-only "$PREV_TAG"..HEAD -- "crates/$member/" | grep -q .; then
-                CHANGED="$CHANGED $member"
-              fi
-            done
-          fi
-
-          for member in $CHANGED; do
-            CURRENT=$(grep '^version = ' "crates/$member/Cargo.toml" | head -n1 | sed 's/version = "\(.*\)"/\1/')
-            BUMP="patch"
-            if [ -n "$PREV_TAG" ]; then
-              while IFS= read -r commit; do
-                if echo "$commit" | grep -q '^chore!(major)'; then
-                  BUMP="major"; break
-                elif echo "$commit" | grep -q '^chore!(minor)'; then
-                  BUMP="minor"
-                fi
-              done < <(git log "$PREV_TAG..HEAD" --no-merges --format="%s" -- "crates/$member/")
-            fi
-            MAJOR=$(echo "$CURRENT" | cut -d. -f1)
-            MINOR=$(echo "$CURRENT" | cut -d. -f2)
-            PATCH=$(echo "$CURRENT" | cut -d. -f3)
-            case "$BUMP" in
-              major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
-              minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
-              patch) PATCH=$((PATCH + 1)) ;;
-            esac
-            echo "$member=$CURRENT:$MAJOR.$MINOR.$PATCH" >> /tmp/member_versions.txt
-          done
-
       - name: Post PR Comment
+        env:
+          MEMBER_VERSIONS: ${{ needs.workspace.outputs.member-versions }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -176,21 +142,14 @@ jobs:
               return;
             }
 
-            // Build member versions from either override or auto-detected
+            // Build member versions from workspace output or override
             let memberVersions = {};
             if (Object.keys(bumpOverrides).length > 0) {
               memberVersions = bumpOverrides;
-            } else {
+            } else if (process.env.MEMBER_VERSIONS) {
               try {
-                const lines = fs.readFileSync('/tmp/member_versions.txt', 'utf8').trim().split('\n');
-                lines.forEach(function (line) {
-                  if (!line) return;
-                  const parts = line.split('=');
-                  if (parts.length === 2) {
-                    memberVersions[parts[0]] = parts[1];
-                  }
-                });
-              } catch (e) { /* no workspace */ }
+                memberVersions = JSON.parse(process.env.MEMBER_VERSIONS);
+              } catch (e) { /* ignore parse errors */ }
             }
 
             let commentBody = '## Release Preview\n\n';

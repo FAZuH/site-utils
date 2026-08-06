@@ -1,6 +1,34 @@
 // https://github.com/conventional-changelog/conventional-changelog-config-spec/blob/master/versions/2.2.0/README.md
 "use strict";
+const fs = require("fs");
+const path = require("path");
 const config = require("conventional-changelog-conventionalcommits");
+
+// Optional per-project release title. A single non-empty line in
+// `.github/version-title` renders as `## 0.1.5: <title> (2026-08-02)`.
+// Absent or empty file means no title (plain `## 0.1.5 (2026-08-02)`).
+const VERSION_TITLE_FILE = path.join(__dirname, "version-title");
+
+function readVersionTitle() {
+  let content;
+  try {
+    content = fs.readFileSync(VERSION_TITLE_FILE, "utf8");
+  } catch (_e) {
+    return null;
+  }
+  const line = content
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l !== "");
+  return line || null;
+}
+
+const HEADER_PARTIAL =
+  "## {{#if @root.linkCompare~}}\n" +
+  "  [{{version}}]({{compareUrlFormat}})\n" +
+  "{{~else}}\n" +
+  "  {{~version}}\n" +
+  "{{~/if}}{{~#if title}}: {{{title}}}{{/if}}{{~#if date}} ({{date}}){{/if}}\n";
 
 function whatBump(commits) {
   const hasMajor = commits.some((c) => c?.header?.startsWith("chore!(major)"));
@@ -16,17 +44,8 @@ function whatBump(commits) {
 }
 
 function isPublicCommit(commit) {
-  const publicMarker = /\[pub(lic)?\]/i;
-  const header = commit.header || "";
   const body = commit.body || "";
-  const subject = commit.subject || "";
-  return publicMarker.test(header) || publicMarker.test(body) || publicMarker.test(subject);
-}
-
-function stripMarkers(str) {
-  const markerRegex = /\s*\[pub(lic)?\]/gi;
-  const skipCiRegex = /\s*\[(skip ci|ci skip|no ci|skip actions|actions skip)\]/gi;
-  return str.replace(markerRegex, "").replace(skipCiRegex, "").trim();
+  return /^changelog:\s*/im.test(body);
 }
 
 const TYPE_LABELS = {
@@ -50,8 +69,7 @@ function typeLabel(type) {
 function extractScope(body, fallback) {
   if (!body) return fallback;
 
-  const cleaned = stripMarkers(body);
-  const lines = cleaned
+  const lines = body
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l !== "");
@@ -68,8 +86,7 @@ function extractScope(body, fallback) {
 function extractChangelogText(body) {
   if (!body) return null;
 
-  const cleaned = stripMarkers(body);
-  const lines = cleaned
+  const lines = body
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l !== "");
@@ -92,14 +109,12 @@ async function getOptions() {
   options.whatBump = whatBump;
 
   if (options.writerOpts) {
+    options.writerOpts.headerPartial = HEADER_PARTIAL;
     if (options.writerOpts.transform) {
       const originalTransform = options.writerOpts.transform;
       options.writerOpts.transform = (commit, context) => {
         if (!isPublicCommit(commit)) return null;
 
-        if (commit.header) commit.header = stripMarkers(commit.header);
-        if (commit.subject) commit.subject = stripMarkers(commit.subject);
-        if (commit.body) commit.body = stripMarkers(commit.body);
         commit.scope = null;
 
         const originalType = commit.type;
@@ -116,7 +131,7 @@ async function getOptions() {
         if (result) {
           if (result.notes) {
             result.notes.forEach((note) => {
-              note.text = stripMarkers(note.text);
+              note.text = note.text.trim();
             });
           }
           return result;
@@ -131,7 +146,7 @@ async function getOptions() {
         if (commit.notes) {
           commit.notes.forEach((note) => {
             note.title = "BREAKING CHANGES";
-            note.text = stripMarkers(note.text);
+            note.text = note.text.trim();
           });
         }
 
@@ -150,6 +165,16 @@ async function getOptions() {
           if (group.commits && group.commits.length > 0) {
             group.title = group.commits[0].type;
           }
+        }
+      }
+
+      // `keyCommit` is null only for the newest release chunk — the one being
+      // generated. Older chunks (release-count > 1) pass the tag commit, so the
+      // title never leaks into previously released entries.
+      if (!keyCommit) {
+        const title = readVersionTitle();
+        if (title) {
+          context.title = title;
         }
       }
 
