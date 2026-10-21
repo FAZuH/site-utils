@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: ''
+      publish-crates:
+        description: 'Whether to publish workspace members to crates.io'
+        required: false
+        type: boolean
+        default: false
     outputs:
       version:
         description: 'The version that was patched'
@@ -15,6 +20,9 @@ on:
       packages:
         description: 'Space-separated list of package names to publish'
         value: ${{ jobs.patch.outputs.packages }}
+      manifests_b64:
+        description: 'Base64 gzip tar of the patched manifests (Cargo.toml, Cargo.lock, crates/**/Cargo.toml)'
+        value: ${{ jobs.patch.outputs.manifests_b64 }}
 
 jobs:
   patch:
@@ -23,6 +31,7 @@ jobs:
     outputs:
       version: ${{ steps.set-version.outputs.version }}
       packages: ${{ steps.workspace.outputs.packages }}
+      manifests_b64: ${{ steps.encode-manifests.outputs.manifests_b64 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,6 +67,12 @@ jobs:
         id: workspace
         run: |
           ROOT_NAME=$(grep '^name = ' Cargo.toml | head -1 | sed 's/name = "\(.*\)"/\1/')
+
+          if [[ "${{ inputs.publish-crates }}" != "true" ]]; then
+            echo "Crates are not published — patching root package only"
+            echo "packages=$ROOT_NAME" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           if ! grep -q '^\[workspace\]' Cargo.toml; then
             echo "No workspace section found — skipping member patching"
@@ -189,6 +204,15 @@ jobs:
       - name: Regenerate Cargo.lock
         run: cargo generate-lockfile
 
+      - name: Encode patched manifests
+        id: encode-manifests
+        run: |
+          find crates -name Cargo.toml 2>/dev/null | sort > /tmp/member-tomls.txt
+          tar czf /tmp/patched-manifests.tar.gz Cargo.toml Cargo.lock --files-from /tmp/member-tomls.txt
+          B64=$(base64 -w0 /tmp/patched-manifests.tar.gz)
+          echo "manifests_b64=$B64" >> "$GITHUB_OUTPUT"
+          echo "Encoded $(wc -c < /tmp/patched-manifests.tar.gz) bytes gzipped (${#B64} chars b64)"
+
       - name: Upload patched manifests
         uses: actions/upload-artifact@v4
         with:
@@ -197,3 +221,4 @@ jobs:
             Cargo.toml
             Cargo.lock
             crates/**/Cargo.toml
+          retention-days: 3
